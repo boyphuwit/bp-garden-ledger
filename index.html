@@ -89,6 +89,11 @@
   .editbar.on{display:flex}
   .editbar button{border:0;background:none;color:#7a5a00;font:inherit;font-weight:600;text-decoration:underline;cursor:pointer}
   .muted{color:var(--muted);font-size:13px}
+  .profitPrev{margin-top:8px;font-size:14px;font-weight:600;text-align:right;min-height:20px}
+  .kpis.five{grid-template-columns:1fr 1fr}
+  .kpi.gp{background:#eaf3f7} .kpi.gp b{color:#23607a}
+  .kpi.cogs{background:#f6f1e6} .kpi.cogs b{color:#8a6420}
+  .sub{grid-column:1/-1;display:flex;justify-content:space-between;font-size:12.5px;color:var(--muted);padding:2px 4px}
   .note{font-size:12.5px;color:var(--muted);text-align:center;margin:6px 0 16px}
 </style>
 </head>
@@ -115,8 +120,13 @@
         <button data-v="in" class="on">＋ รายรับ</button>
         <button data-v="out">－ รายจ่าย</button>
       </div>
-      <label for="amt">จำนวนเงิน (บาท)</label>
+      <label for="amt" id="amtLabel">ราคาขาย (บาท)</label>
       <input id="amt" class="amount" inputmode="decimal" placeholder="0" autocomplete="off">
+      <div id="costBox">
+        <label for="cost">ราคาทุน (บาท) <span style="opacity:.7">— ไม่มีทุน เช่น ค่าบริการ ให้เว้นว่าง</span></label>
+        <input id="cost" class="amount" inputmode="decimal" placeholder="0" autocomplete="off" style="font-size:22px">
+        <div id="profitPreview" class="profitPrev"></div>
+      </div>
       <label>หมวดหมู่</label>
       <div class="chips" id="cats"></div>
       <div class="row">
@@ -161,7 +171,7 @@
       <p class="muted" id="chartHint" style="margin:8px 0 0;text-align:center">แตะแท่งกราฟเพื่อดูช่วงนั้น</p>
     </div>
     <div class="card">
-      <h2>รายรับตามหมวด</h2>
+      <h2>ยอดขายและกำไรตามหมวด</h2>
       <div class="bars" id="catIn"></div>
     </div>
     <div class="card">
@@ -355,16 +365,29 @@
 
   // ---------- helpers ----------
   const list = () => Object.values(entries);
-  function sumOf(arr){ let i=0,o=0; arr.forEach(e=>{ if(e.type==="in") i+=e.amount; else o+=e.amount; }); return {i,o,n:i-o}; }
+  // หมวดที่เป็นการซื้อสินค้าเข้าสต็อก: ไม่นับเป็นค่าใช้จ่ายในกำไร เพราะคิดผ่าน "ราคาทุน" ตอนขายแล้ว
+  const STOCK_CATS = ["ซื้อต้นไม้เข้าร้าน","ซื้อกระถาง/ดิน"];
+  const costOf = e => e.type==="in" ? (Number(e.cost)||0) : 0;
+  function sumOf(arr){
+    let sales=0,cogs=0,opex=0,stock=0;
+    arr.forEach(e=>{ if(e.type==="in"){ sales+=e.amount; cogs+=costOf(e); }
+      else if(STOCK_CATS.includes(e.cat)) stock+=e.amount; else opex+=e.amount; });
+    const gp=sales-cogs, n=gp-opex, cash=sales-opex-stock;
+    return {i:sales,o:opex+stock,sales,cogs,gp,opex,stock,n,cash};
+  }
+  const money = v => (v<0?"-":"")+"฿"+fmt(Math.abs(v));
   function kpiHtml(s){
-    return `<div class="kpi in"><small>รายรับ</small><b>฿${fmt(s.i)}</b></div>
-            <div class="kpi out"><small>รายจ่าย</small><b>฿${fmt(s.o)}</b></div>
-            <div class="kpi net"><small>กำไรสุทธิ</small><b style="color:${s.n>=0?"var(--in)":"var(--out)"}">${s.n<0?"-":""}฿${fmt(Math.abs(s.n))}</b></div>`;
+    return `<div class="kpi in"><small>ยอดขาย</small><b>฿${fmt(s.sales)}</b></div>
+            <div class="kpi cogs"><small>ต้นทุนสินค้าที่ขาย</small><b>฿${fmt(s.cogs)}</b></div>
+            <div class="kpi gp"><small>กำไรขั้นต้น${s.sales>0?" ("+Math.round(s.gp/s.sales*100)+"%)":""}</small><b>${money(s.gp)}</b></div>
+            <div class="kpi out"><small>ค่าใช้จ่ายร้าน</small><b>฿${fmt(s.opex)}</b></div>
+            <div class="kpi net"><small>กำไรสุทธิ</small><b style="color:${s.n>=0?"var(--in)":"var(--out)"}">${money(s.n)}</b></div>
+            <div class="sub"><span>ซื้อสินค้าเข้าสต็อก ฿${fmt(s.stock)}</span><span>เงินสดสุทธิ ${money(s.cash)}</span></div>`;
   }
   function itemHtml(e, showDate){
     return `<li class="item" data-id="${esc(e.id)}">
       <div class="dot ${e.type}">${e.type==="in"?"＋":"－"}</div>
-      <div class="t"><div>${esc(e.cat)}</div><small>${showDate?dateTH(e.date)+" · ":""}${esc(e.pay)}${e.note?" · "+esc(e.note):""}</small></div>
+      <div class="t"><div>${esc(e.cat)}</div><small>${showDate?dateTH(e.date)+" · ":""}${e.type==="in"&&costOf(e)>0?"ทุน "+fmt(costOf(e))+" · กำไร "+fmt(e.amount-costOf(e))+" · ":""}${esc(e.pay)}${e.note?" · "+esc(e.note):""}</small></div>
       <div class="a ${e.type}">${e.type==="in"?"+":"-"}${fmt(e.amount)}</div></li>`;
   }
 
@@ -378,17 +401,30 @@
     type=t; [...$("#typeSeg").children].forEach(x=>x.classList.toggle("on",x.dataset.v===t));
     if (!CATS[t].includes(cat)) cat = CATS[t][0];
     renderCats();
+    $("#costBox").style.display = t==="in" ? "" : "none";
+    $("#amtLabel").textContent = t==="in" ? "ราคาขาย (บาท)" : "จำนวนเงิน (บาท)";
+    updatePreview();
     $("#saveBtn").style.background = t==="in"?"var(--in)":"var(--out)";
     $("#saveBtn").textContent = editing ? "บันทึกการแก้ไข" : (t==="in"?"บันทึกรายรับ":"บันทึกรายจ่าย");
   }
-  $("#amt").addEventListener("input", e=>{ e.target.value = e.target.value.replace(/[^\d.,]/g,""); });
+  const num = v => parseFloat(String(v||"").replace(/,/g,""));
+  function updatePreview(){
+    const a=num($("#amt").value), c=num($("#cost").value), el=$("#profitPreview");
+    if (type!=="in" || !(a>0)) { el.textContent=""; return; }
+    const p = a-(c>0?c:0);
+    el.style.color = p>=0?"var(--in)":"var(--out)";
+    el.textContent = "กำไร "+money(p)+(a>0?" ("+Math.round(p/a*100)+"%)":"");
+  }
+  ["#amt","#cost"].forEach(s=>$(s).addEventListener("input", e=>{ e.target.value = e.target.value.replace(/[^\d.,]/g,""); updatePreview(); }));
   $("#saveBtn").addEventListener("click", ()=>{
-    const amount = parseFloat(($("#amt").value||"").replace(/,/g,""));
-    if (!(amount>0)) { toast("ใส่จำนวนเงินก่อนครับ"); $("#amt").focus(); return; }
+    const amount = num($("#amt").value);
+    if (!(amount>0)) { toast(type==="in"?"ใส่ราคาขายก่อนครับ":"ใส่จำนวนเงินก่อนครับ"); $("#amt").focus(); return; }
+    const costV = type==="in" ? (num($("#cost").value)||0) : 0;
+    if (costV<0) { toast("ราคาทุนไม่ถูกต้อง"); return; }
     const date = $("#date").value || todayStr();
     const old = editing ? entries[editing] : null;
     const entry = { id: editing || (Date.now().toString(36)+Math.random().toString(36).slice(2,7)),
-      date, type, cat, amount, pay: $("#pay").value, note: $("#note").value.trim().slice(0,200),
+      date, type, cat, amount, cost: costV, pay: $("#pay").value, note: $("#note").value.trim().slice(0,200),
       ts: old ? old.ts : Date.now() };
     saveEntry(entry, old);
     toast(editing ? "แก้ไขแล้ว" : (type==="in"?"บันทึกรายรับแล้ว":"บันทึกรายจ่ายแล้ว"));
@@ -396,7 +432,7 @@
   });
   function resetForm(){
     editing=null; $("#editbar").classList.remove("on");
-    $("#amt").value=""; $("#note").value=""; $("#date").value=todayStr();
+    $("#amt").value=""; $("#cost").value=""; $("#note").value=""; $("#date").value=todayStr();
     setType(type);
   }
   $("#cancelEdit").addEventListener("click", resetForm);
@@ -416,7 +452,7 @@
     const it = entries[li.dataset.id]; if(!it) return;
     sheetItem = it;
     $("#mTitle").textContent = (it.type==="in"?"รายรับ · ":"รายจ่าย · ")+it.cat;
-    $("#mBody").innerHTML = `฿${fmt(it.amount)} · ${dateTH(it.date)} · ${esc(it.pay)}${it.note?"<br>"+esc(it.note):""}`;
+    $("#mBody").innerHTML = `${it.type==="in"?"ขาย ":""}฿${fmt(it.amount)}${it.type==="in"&&costOf(it)>0?" · ทุน ฿"+fmt(costOf(it))+" · กำไร "+money(it.amount-costOf(it)):""} · ${dateTH(it.date)} · ${esc(it.pay)}${it.note?"<br>"+esc(it.note):""}`;
     $("#mDel").textContent="ลบรายการนี้"; $("#mDel").dataset.confirm="";
     $("#modal").classList.add("show");
   });
@@ -430,7 +466,7 @@
   $("#mEdit").addEventListener("click", ()=>{
     const it=sheetItem; $("#modal").classList.remove("show");
     editing = it.id; type = it.type; cat = it.cat;
-    $("#amt").value = it.amount; $("#date").value = it.date; $("#pay").value = it.pay; $("#note").value = it.note||"";
+    $("#amt").value = it.amount; $("#cost").value = costOf(it)||""; $("#date").value = it.date; $("#pay").value = it.pay; $("#note").value = it.note||"";
     $("#editbar").classList.add("on"); setType(it.type); go("add"); window.scrollTo({top:0,behavior:"smooth"});
   });
 
@@ -456,10 +492,11 @@
   }
 
   function catBars(el, arr, color){
-    const by = {}; arr.forEach(e=>{ by[e.cat]=(by[e.cat]||0)+e.amount; });
+    const by = {}, pr = {}; arr.forEach(e=>{ by[e.cat]=(by[e.cat]||0)+e.amount; pr[e.cat]=(pr[e.cat]||0)+e.amount-costOf(e); });
+    const isIn = arr.length && arr[0].type==="in";
     const rows = Object.entries(by).sort((a,b)=>b[1]-a[1]);
     const tot = rows.reduce((s,r)=>s+r[1],0);
-    el.innerHTML = rows.length ? rows.map(([c,v])=>`<div class="b"><div class="l"><span>${esc(c)}</span><span><b>฿${fmt(v)}</b> <span class="muted">${Math.round(v/tot*100)}%</span></span></div>
+    el.innerHTML = rows.length ? rows.map(([c,v])=>`<div class="b"><div class="l"><span>${esc(c)}</span><span><b>฿${fmt(v)}</b> <span class="muted">${isIn?"กำไร "+money(pr[c]):Math.round(v/tot*100)+"%"}</span></span></div>
       <div class="track"><div class="fill" style="width:${(v/rows[0][1]*100).toFixed(1)}%;background:${color}"></div></div></div>`).join("")
       : `<div class="empty">ไม่มีข้อมูล</div>`;
   }
@@ -492,7 +529,8 @@
     catBars($("#catOut"), inPeriod.filter(e=>e.type==="out"), "var(--out)");
 
     const inc = keys.map(()=>0), exp = keys.map(()=>0), idx = {}; keys.forEach((k,i)=>idx[k]=i);
-    all.forEach(e=>{ const i=idx[keyFn(e)]; if(i===undefined) return; if(e.type==="in") inc[i]+=e.amount; else exp[i]+=e.amount; });
+    all.forEach(e=>{ const i=idx[keyFn(e)]; if(i===undefined) return;
+      if(e.type==="in"){ inc[i]+=e.amount; exp[i]+=costOf(e); } else if(!STOCK_CATS.includes(e.cat)) exp[i]+=e.amount; });
     const net = keys.map((_,i)=>inc[i]-exp[i]);
     chartKeys = keys;
     drawChart(labels, inc, exp, net, keys.indexOf(selKey));
@@ -504,9 +542,9 @@
     const data = {
       labels,
       datasets:[
-        {type:"bar",label:"รายรับ",data:inc,backgroundColor:inc.map((_,i)=>alpha("#2f8a4a",i)),borderRadius:4,order:2},
-        {type:"bar",label:"รายจ่าย",data:exp,backgroundColor:exp.map((_,i)=>alpha("#c4532f",i)),borderRadius:4,order:2},
-        {type:"line",label:"กำไร",data:net,borderColor:"#1f2a1f",backgroundColor:"#1f2a1f",borderWidth:2,pointRadius:labels.length>15?0:3,tension:.3,order:1}
+        {type:"bar",label:"ยอดขาย",data:inc,backgroundColor:inc.map((_,i)=>alpha("#2f8a4a",i)),borderRadius:4,order:2},
+        {type:"bar",label:"ทุน+ค่าใช้จ่าย",data:exp,backgroundColor:exp.map((_,i)=>alpha("#c4532f",i)),borderRadius:4,order:2},
+        {type:"line",label:"กำไรสุทธิ",data:net,borderColor:"#1f2a1f",backgroundColor:"#1f2a1f",borderWidth:2,pointRadius:labels.length>15?0:3,tension:.3,order:1}
       ]
     };
     const opts = {
@@ -554,8 +592,8 @@
   }
   $("#copyCsv").addEventListener("click", async ()=>{
     const arr = listFiltered().slice().reverse();
-    const rows = [["วันที่","ประเภท","หมวด","จำนวนเงิน","ช่องทาง","หมายเหตุ"]]
-      .concat(arr.map(e=>[e.date, e.type==="in"?"รายรับ":"รายจ่าย", e.cat, e.amount, e.pay, (e.note||"").replace(/[\t\n]/g," ")]));
+    const rows = [["วันที่","ประเภท","หมวด","จำนวนเงิน","ราคาทุน","กำไร","ช่องทาง","หมายเหตุ"]]
+      .concat(arr.map(e=>[e.date, e.type==="in"?"รายรับ":"รายจ่าย", e.cat, e.amount, e.type==="in"?costOf(e):"", e.type==="in"?e.amount-costOf(e):"", e.pay, (e.note||"").replace(/[\t\n]/g," ")]));
     const tsv = rows.map(r=>r.join("\t")).join("\n");
     try{ await navigator.clipboard.writeText(tsv); toast("คัดลอกแล้ว "+arr.length+" รายการ — วางใน Excel/Sheets ได้เลย"); }
     catch(e){ toast("คัดลอกไม่ได้ในหน้านี้"); }
@@ -577,7 +615,7 @@
       const arr = Array.isArray(data) ? data : (data.entries||[]);
       let n=0;
       arr.forEach(x=>{ if(x && x.id && x.date && (x.type==="in"||x.type==="out") && x.amount>0){
-        entries[x.id] = {id:String(x.id),date:String(x.date),type:x.type,cat:String(x.cat||"อื่นๆ"),amount:Number(x.amount),pay:String(x.pay||"เงินสด"),note:String(x.note||""),ts:Number(x.ts)||Date.now()}; n++; } });
+        entries[x.id] = {id:String(x.id),date:String(x.date),type:x.type,cat:String(x.cat||"อื่นๆ"),amount:Number(x.amount),cost:Number(x.cost)||0,pay:String(x.pay||"เงินสด"),note:String(x.note||""),ts:Number(x.ts)||Date.now()}; n++; } });
       saveLocal(); renderAll(); toast("กู้คืนแล้ว "+n+" รายการ");
     }catch(err){ toast("ไฟล์ไม่ถูกต้อง"); }
   });
