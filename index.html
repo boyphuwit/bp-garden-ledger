@@ -95,9 +95,35 @@
   .kpi.cogs{background:#f6f1e6} .kpi.cogs b{color:#8a6420}
   .sub{grid-column:1/-1;display:flex;justify-content:space-between;font-size:12.5px;color:var(--muted);padding:2px 4px}
   .note{font-size:12.5px;color:var(--muted);text-align:center;margin:6px 0 16px}
+  /* ---- login ---- */
+  body.locked > :not(#login){display:none !important}
+  #login{display:none;min-height:100vh;align-items:center;justify-content:center;padding:24px 18px;
+    background:linear-gradient(160deg,#24552e 0%,#3f8a4c 55%,#f3f5ef 55.1%)}
+  body.locked #login{display:flex}
+  .lbox{background:#fff;border-radius:22px;padding:28px 22px 24px;width:100%;max-width:380px;box-shadow:0 10px 30px rgba(20,50,20,.18)}
+  .lbox .logo{background:var(--green-soft);width:58px;height:58px;border-radius:16px;margin:0 auto 12px}
+  .lbox h1{text-align:center;margin:0;font-size:22px}
+  .lbox p.s{text-align:center;color:var(--muted);margin:4px 0 14px;font-size:14px}
+  .lerr{color:var(--out);font-size:14px;text-align:center;min-height:20px;margin-top:10px}
+  .pwrow{position:relative}
+  .pwrow button{position:absolute;right:8px;top:50%;transform:translateY(-50%);border:0;background:none;color:var(--muted);font:inherit;font-size:13px;cursor:pointer;padding:6px}
+  .logout{margin-left:8px;border:0;background:rgba(255,255,255,.18);color:#fff;font:inherit;font-size:11px;padding:4px 9px;border-radius:99px;cursor:pointer;white-space:nowrap}
 </style>
 </head>
-<body>
+<body class="locked">
+<div id="login">
+  <form class="lbox" id="loginForm" autocomplete="on">
+    <div class="logo"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#2f6b3a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22V11"/><path d="M12 11C12 6 8 3 4 3c0 5 3 8 8 8z"/><path d="M12 14c0-4 3-7 8-7 0 4-3 7-8 7z"/></svg></div>
+    <h1>BP garden</h1>
+    <p class="s">เข้าสู่ระบบบันทึกรายรับ–รายจ่าย</p>
+    <label for="lUser">ชื่อผู้ใช้</label>
+    <input id="lUser" name="username" autocomplete="username" autocapitalize="none" placeholder="ชื่อผู้ใช้">
+    <label for="lPass">รหัสผ่าน</label>
+    <div class="pwrow"><input id="lPass" name="password" type="password" autocomplete="current-password" placeholder="รหัสผ่าน" style="padding-right:56px"><button type="button" id="lShow">แสดง</button></div>
+    <button class="btn" type="submit">เข้าสู่ระบบ</button>
+    <div class="lerr" id="lErr"></div>
+  </form>
+</div>
 <header>
   <div class="wrap">
     <div class="logo">
@@ -108,6 +134,7 @@
       <p>บันทึกรายรับ–รายจ่าย</p>
     </div>
     <span class="sync" id="sync">กำลังเชื่อมต่อ…</span>
+    <button class="logout" id="logoutBtn" type="button">ออกจากระบบ</button>
   </div>
 </header>
 
@@ -239,7 +266,7 @@
 (function(){
   const CATS = {
     in: ["ขายไม้ล้อม","ขายต้นไม้กระถาง","ขายกระถาง","ขายดิน/วัสดุปลูก","ค่าปลูก/จัดสวน","ค่าส่ง","ดูแลสวน","ระบบฟาร์มอัจฉริยะ","อื่นๆ"],
-    out:["ซื้อต้นไม้เข้าร้าน","ซื้อกระถาง/ดิน","ค่าเช่าที่","ค่าแรง","ค่าน้ำมัน/ขนส่ง","ค่าน้ำ/ไฟ","ปุ๋ย/ยา/อุปกรณ์","โฆษณา/การตลาด","ซื้ออุปกรณ์สิ้นเปลือง","อื่นๆ"]
+    out:["ซื้อต้นไม้เข้าร้าน","ซื้อกระถาง/ดิน","ค่าเช่าที่","ค่าแรง","ค่าน้ำมัน/ขนส่ง","ค่าน้ำ/ไฟ","ปุ๋ย/ยา/อุปกรณ์","โฆษณา/การตลาด","อื่นๆ"]
   };
   const TH_M = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
   const TH_MF = ["มกราคม","กุมภาพันธ์","มีนาคม","เมษายน","พฤษภาคม","มิถุนายน","กรกฎาคม","สิงหาคม","กันยายน","ตุลาคม","พฤศจิกายน","ธันวาคม"];
@@ -635,6 +662,40 @@
     if ($("#v-sum").classList.contains("on")) renderSummary();
     if ($("#v-list").classList.contains("on")) renderList();
   }
+
+  // ---------- login ----------
+  const AUTH_KEY = "bpgarden-auth";
+  const USER_OK = "bp garden";   // ไม่สนตัวพิมพ์เล็ก/ใหญ่
+  const PASS_SHA256 = "9a2a374a8140bad8e06b237822abe87b68f8334aa1b1622f37f08359011ec5f0";
+  const normUser = u => String(u||"").trim().replace(/\s+/g," ").toLowerCase();
+  async function sha256(t){
+    if (window.crypto && crypto.subtle){
+      const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(t));
+      return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("");
+    }
+    return null;
+  }
+  function unlock(){ document.body.classList.remove("locked"); renderAll(); }
+  try{ if (localStorage.getItem(AUTH_KEY)===PASS_SHA256) unlock(); }catch(e){}
+  $("#lShow").addEventListener("click", ()=>{ const i=$("#lPass"); const show=i.type==="password"; i.type=show?"text":"password"; $("#lShow").textContent=show?"ซ่อน":"แสดง"; });
+  $("#loginForm").addEventListener("submit", async e=>{
+    e.preventDefault();
+    const u = normUser($("#lUser").value), pw = $("#lPass").value;
+    const h = await sha256(pw);
+    const ok = u===USER_OK && h===PASS_SHA256;
+    if (!ok){ $("#lErr").textContent = "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง"; $("#lPass").value=""; $("#lPass").focus(); return; }
+    $("#lErr").textContent = "";
+    try{ localStorage.setItem(AUTH_KEY, PASS_SHA256); }catch(err){}
+    $("#lPass").value = "";
+    unlock(); go("add");
+  });
+  let logoutArmed = false;
+  $("#logoutBtn").addEventListener("click", ()=>{
+    if (!logoutArmed){ logoutArmed=true; $("#logoutBtn").textContent="แตะอีกครั้ง"; setTimeout(()=>{ logoutArmed=false; $("#logoutBtn").textContent="ออกจากระบบ"; },3000); return; }
+    try{ localStorage.removeItem(AUTH_KEY); }catch(e){}
+    logoutArmed=false; $("#logoutBtn").textContent="ออกจากระบบ";
+    document.body.classList.add("locked"); $("#lUser").focus();
+  });
 
   // ---------- boot ----------
   $("#date").value = todayStr();
