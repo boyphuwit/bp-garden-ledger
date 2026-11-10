@@ -41,7 +41,13 @@
   input,select,textarea{width:100%;font:inherit;padding:12px;border:1px solid var(--line);border-radius:12px;background:#fbfcf9;color:var(--ink);outline:none}
   input:focus,select:focus,textarea:focus{border-color:var(--green-2);background:#fff}
   .amount{font-size:28px;font-weight:700;text-align:right;padding:14px}
-  .row{display:flex;gap:10px}.row>*{flex:1}
+  .row{display:flex;gap:10px}.row>*{flex:1 1 0;min-width:0}
+  /* iOS Safari: ช่อง date/month มีความกว้างขั้นต่ำของตัวเอง ทำให้ล้นทับช่องข้างๆ */
+  input[type="date"],input[type="month"]{-webkit-appearance:none;appearance:none;display:block;width:100%;min-width:0;max-width:100%;min-height:50px;text-align:left}
+  input[type="date"]::-webkit-date-and-time-value,input[type="month"]::-webkit-date-and-time-value{text-align:left;margin:0}
+  select{-webkit-appearance:none;appearance:none;min-height:50px;padding-right:34px;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%236b7a6a' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat:no-repeat;background-position:right 12px center}
   .chips{display:flex;flex-wrap:wrap;gap:8px}
   .chip{border:1px solid var(--line);background:#fff;border-radius:99px;padding:8px 13px;font:inherit;font-size:14px;cursor:pointer;color:var(--ink)}
   .chip.on{background:var(--green-soft);border-color:var(--green-2);color:var(--green);font-weight:600}
